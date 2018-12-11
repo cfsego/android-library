@@ -29,21 +29,41 @@
 import json
 import os
 
+from .utils import utils
 
-class _resource(object):
 
-    def __init__(self):
-        self.res_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "resource")
-        self.config_path = os.path.join(self.res_path, ".config")
+class resource(object):
+    _res_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "resource"))
+    _config_path = os.path.join(_res_path, ".config")
+    _config_data = None
 
-    def get_config(self):
-        with open(self.config_path, "rt") as fd:
-            config = json.load(fd)
-        return config
+    @staticmethod
+    def get_config(*key: [str]):
+        if not hasattr(resource, "config"):
+            with open(resource._config_path, "rt") as fd:
+                resource.config = json.load(fd)
+        if utils.empty(key):
+            return resource.config
+        return utils.item(resource.config, *key)
 
-    def save_config(self, config):
-        with open(self.config_path, "wt") as fd:
-            json.dump(fd, config)
+    # @staticmethod
+    # def save_config(config):
+    #     with open(resource._config_path, "wt") as fd:
+    #         json.dump(fd, config, sort_keys=True, indent=4)
 
-    def get_path(self, name):
-        return os.path.join(self.res_path, name)
+    @staticmethod
+    def store_path(*names: [str]):
+        return resource._get_path("store", *names)
+
+    @staticmethod
+    def download_path(*names: [str]):
+        return resource._get_path("download", *names)
+
+    @staticmethod
+    def _get_path(keyword, *names: [str]):
+        path = os.path.join(resource._res_path, keyword)
+        for name in names:
+            if not os.path.exists(path):
+                os.makedirs(path)
+            path = os.path.join(path, name)
+        return path

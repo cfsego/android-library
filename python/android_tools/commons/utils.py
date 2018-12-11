@@ -40,9 +40,9 @@ from tqdm import tqdm, TqdmSynchronisationWarning
 
 class _process(subprocess.Popen):
 
-    def __init__(self, command, stdin, stdout, stderr):
+    def __init__(self, *args, stdin, stdout, stderr):
         """
-        :param command: 命令
+        :param args: 参数
         :param stdin: 输入流
         :param stdout: 输出流
         :param stderr: 错误输出流
@@ -50,7 +50,7 @@ class _process(subprocess.Popen):
         self.out = ""
         self.err = ""
         self.returncode = -0x7fffffff
-        subprocess.Popen.__init__(self, command, shell=True, stdin=stdin, stdout=stdout, stderr=stderr)
+        subprocess.Popen.__init__(self, args, shell=False, stdin=stdin, stdout=stdout, stderr=stderr)
 
     def communicate(self, **kwargs):
         out, err = None, None
@@ -131,24 +131,21 @@ class utils:
         return re.search(reg, string) is not None
 
     @staticmethod
-    def contain(obj: object, key: object, value: object = None) -> bool:
+    def contain(obj: object, key: object) -> bool:
         """
         是否包含内容
         :param obj: 对象
         :param key: 键
-        :param value: 值
         :return: 是否包含
         """
         if object is None:
             return False
-        if isinstance(obj, dict):
-            return key in obj and (value is None or obj[key] == value)
         if isinstance(obj, Iterable):
             return key in obj
         return False
 
     @staticmethod
-    def is_empty(obj: object):
+    def empty(obj: object):
         """
         对象是否为空
         :param obj: 对象
@@ -162,16 +159,31 @@ class utils:
         return False
 
     @staticmethod
-    def exec(command: str, stdin=PIPE, stdout=PIPE, stderr=PIPE) -> _process:
+    def item(obj: object, *keys):
+        """
+        获取子项
+        :param obj: 对象
+        :param keys: 键
+        :return: 子项
+        """
+        try:
+            for key in keys:
+                obj = obj.__getitem__(key)
+        except:
+            obj = None
+        return obj
+
+    @staticmethod
+    def exec(*args: str, stdin=PIPE, stdout=PIPE, stderr=PIPE) -> _process:
         """
         执行命令
-        :param command: 命令
+        :param args: 参数
         :param stdin: 输入流，默认为utils.PIPE，标准输入为None
         :param stdout: 输出流，默认为utils.PIPE，标准输出为None
         :param stderr: 错误输出流，默认为utils.PIPE，输出到输出流为utils.STDOUT，标准输出为None
         :return: 子进程
         """
-        process = _process(command, stdin, stdout, stderr)
+        process = _process(*args, stdin=stdin, stdout=stdout, stderr=stderr)
         process.communicate()
         return process
 
@@ -201,27 +213,27 @@ class utils:
         :param path: 保存路径
         :return: 文件大小
         """
-        file_dir = os.path.dirname(path)
-        if not os.path.exists(file_dir):
-            os.makedirs(file_dir)
-        if os.path.exists(path):
-            first_byte = os.path.getsize(path)
+        dir = os.path.dirname(path)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+        tmp_path = path + ".download"
+        if os.path.exists(tmp_path):
+            offset = os.path.getsize(tmp_path)
         else:
-            first_byte = 0
-        file_size = int(urlopen(url).info().get('Content-Length', -1))
-        if first_byte >= file_size:
-            return file_size
-        header = {"Range": "bytes=%s-%s" % (first_byte, file_size)}
+            offset = 0
+        size = int(urlopen(url).info().get('Content-Length', -1))
+        if offset >= size:
+            return size
+        header = {"Range": "bytes=%s-%s" % (offset, size)}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", TqdmSynchronisationWarning)
-            pbar = tqdm(total=file_size, initial=first_byte, unit='B', unit_scale=True, desc=url.split('/')[-1])
+            pbar = tqdm(total=size, initial=offset, unit='B', unit_scale=True, desc=url.split('/')[-1])
             req = requests.get(url, headers=header, stream=True)
-            with (open(path, 'ab')) as f:
+            with (open(tmp_path, 'ab')) as fd:
                 for chunk in req.iter_content(chunk_size=1024):
                     if chunk:
-                        f.write(chunk)
+                        fd.write(chunk)
                         pbar.update(1024)
-                    pass
-                pass
             pbar.close()
-        return file_size
+        os.rename(tmp_path, path)
+        return size
